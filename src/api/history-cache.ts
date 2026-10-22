@@ -15,9 +15,19 @@ export interface LoanHistoryResponse {
   }>
 }
 
+export async function invalidateHistoryCache(): Promise<void> {
+  const cache = createHistoryCache()
+  try {
+    await cache.invalidate()
+  } finally {
+    await cache.close()
+  }
+}
+
 export function createHistoryCache(): {
   get(): Promise<LoanHistoryResponse | null>
   set(value: LoanHistoryResponse): Promise<void>
+  invalidate(): Promise<void>
   close(): Promise<void>
 } {
   let localValue: { expiresAt: number; value: LoanHistoryResponse } | null = null
@@ -52,12 +62,24 @@ export function createHistoryCache(): {
       return localValue && localValue.expiresAt > Date.now() ? localValue.value : null
     },
     async set(value) {
-      localValue = { expiresAt: Date.now() + HISTORY_CACHE_TTL_SECONDS * 1000, value }
+      const isEmpty = !value.data || value.data.length === 0
+      const ttl = isEmpty ? 10 : HISTORY_CACHE_TTL_SECONDS
+      localValue = { expiresAt: Date.now() + ttl * 1000, value }
+      if (isEmpty) return
       try {
         const redis = await redisClient()
-        await redis?.set(HISTORY_CACHE_KEY, JSON.stringify(value), { EX: HISTORY_CACHE_TTL_SECONDS })
+        await redis?.set(HISTORY_CACHE_KEY, JSON.stringify(value), { EX: ttl })
       } catch {
         // The local cache remains available if Redis is temporarily offline.
+      }
+    },
+    async invalidate() {
+      localValue = null
+      try {
+        const redis = await redisClient()
+        await redis?.del(HISTORY_CACHE_KEY)
+      } catch {
+        // Ignore redis errors on invalidation
       }
     },
     async close() {

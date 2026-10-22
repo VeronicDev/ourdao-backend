@@ -4,6 +4,7 @@ import { applyEvent } from './handlers.js'
 import { namedFields, type DecodedEvent } from '../stellar/events.js'
 import { DERIVED_TABLES, resetDaoTotals } from './derived-tables.js'
 import { notifyStreamClientsAfterCommit, type StreamChannel } from '../api/stream.js'
+import { createHistoryCache } from '../api/history-cache.js'
 
 // Every acquisition pairs this key with `hashtext(current_schema())`, so the
 // lock is scoped to the schema the data lives in: one lock per deployment in
@@ -206,6 +207,14 @@ export async function reindexFromEventLog(options?: ReindexOptions): Promise<{ e
   // shared pool (issue #169), never on the reindex transaction's own client.
   for (const channel of touchedChannels) {
     await notifyStreamClientsAfterCommit(channel, { symbol: 'reindex', timestamp: Date.now() })
+  }
+
+  try {
+    const historyCache = createHistoryCache()
+    await historyCache.invalidate()
+    await historyCache.close()
+  } catch {
+    // Ignore cache invalidation failure
   }
 
   return { events: processed }

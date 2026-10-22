@@ -5,6 +5,25 @@ import { query } from '../src/db/index.js'
 import { closeDb, resetDb } from './db.js'
 
 describe('API: historical loan stats', () => {
+  it('does not cache empty stats array or invalidates on new loan origination', async () => {
+    const res1 = await app.inject({ method: 'GET', url: '/api/stats/history' })
+    expect(res1.statusCode).toBe(200)
+    expect(res1.json().data).toEqual([])
+
+    await query(
+      `INSERT INTO daily_loan_stats
+         (day, loans_originated, principal_lent, principal_repaid, defaults_count, value_defaulted)
+       VALUES
+         ('2026-02-01', 1, 1000, 0, 0, 0)`
+    )
+
+    const { invalidateHistoryCache } = await import('../src/api/history-cache.js')
+    invalidateHistoryCache()
+
+    const res2 = await app.inject({ method: 'GET', url: '/api/stats/history' })
+    expect(res2.statusCode).toBe(200)
+    expect(res2.json().data.length).toBeGreaterThan(0)
+  })
   let app: FastifyInstance
 
   beforeEach(async () => {
