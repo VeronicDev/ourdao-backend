@@ -29,6 +29,30 @@
     },
     "/api/members": {
       "get": {
+        "summary": "List members with pagination",
+        "tags": [
+          "Members"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "Max rows to return (1-200, default 50)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Pagination cursor: return rows below this joined_ledger or joined_ledger-address."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response"
