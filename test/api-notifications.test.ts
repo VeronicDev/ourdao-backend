@@ -30,6 +30,28 @@ describe('API: notification mutations', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  it('GET /api/notifications supports filtering by unread and read states', async () => {
+    await query(
+      `INSERT INTO notifications (id, address, type, title, message, read) VALUES
+       (20, $1, 'info', 't1', 'm1', false),
+       (21, $1, 'info', 't2', 'm2', true),
+       (22, $1, 'info', 't3', 'm3', false)`,
+      [address]
+    )
+    const resUnread = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=true` })
+    const unreadBody = resUnread.json()
+    expect(unreadBody).toHaveLength(2)
+    expect(unreadBody.map((n: { id: number }) => n.id)).toEqual([22, 20])
+
+    const resRead = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&read=true` })
+    const readBody = resRead.json()
+    expect(readBody).toHaveLength(1)
+    expect(readBody[0].id).toBe(21)
+
+    const resInvalid = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=maybe` })
+    expect(resInvalid.statusCode).toBe(400)
+  })
+
   it('GET /api/notifications supports before-id cursor pagination', async () => {
     await query(
       `INSERT INTO notifications (id, address, type, title, message) VALUES
