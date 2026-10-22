@@ -341,19 +341,39 @@ export async function registerRoutes(app: FastifyInstance, opts: { nonceStore: N
     const q = req.query as Record<string, unknown>
     if (invalidLimit(q.limit)) return reply.code(400).send({ error: 'invalid limit parameter' })
     const l = limit(q.limit)
-    // Issue #277: this ordered member listing is the closest thing this
-    // codebase has to a "leaderboard" and, like /members/:address/summary
-    // below, is heavy enough (full table scan + sort) to be worth a
-    // short-lived read-through cache. Falls straight through to Postgres
-    // when REDIS_URL isn't configured — see src/cache/redis.ts.
-    return getOrSetCache(membersListCacheKey(l), config.cache.memberCacheTtlSeconds, () =>
+    const before = cursor(q.before)
+    if (invalidCursor(q.before)) return reply.code(400).send({ error: 'invalid before cursor' })
+
+    const conditions: string[] = ['exited = false', 'joined_ledger IS NOT NULL']
+    const params: unknown[] = []
+    if (before !== null) {
+      params.push(before)
+      conditions.push(`joined_ledger < $${params.length}`)
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`
+    params.push(l + 1)
+
+    const rows = await getOrSetCache(membersListCacheKey(l), config.cache.memberCacheTtlSeconds, () =>
       query<MemberRow>(
         `SELECT * FROM members
-          WHERE exited = false AND joined_ledger IS NOT NULL
-          ORDER BY joined_ledger DESC NULLS LAST LIMIT $1`,
-        [l]
+           ${where}
+           ORDER BY joined_ledger DESC NULLS LAST, address DESC LIMIT $${params.length}`,
+        params
       )
     )
+
+    const hasMore = rows.length > l
+    const data = hasMore ? rows.slice(0, l) : rows
+    const lastItem = data[data.length - 1]
+    const nextCursor = hasMore && lastItem && lastItem.joined_ledger !== null ? lastItem.joined_ledger : null
+
+    return {
+      rows: data,
+      pagination: {
+        has_more: hasMore,
+        next_cursor: nextCursor,
+      },
+    }
   })
 
   app.get<{ Params: { address: string } }>('/members/:address', async (req, reply) => {
