@@ -47,6 +47,31 @@ describe('API: notification mutations', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  it('GET /api/notifications filters by unread and read state parameters', async () => {
+    await query(
+      `INSERT INTO notifications (id, address, type, title, message, read) VALUES
+       (20, $1, 'info', 't1', 'm1', false),
+       (21, $1, 'info', 't2', 'm2', true),
+       (22, $1, 'info', 't3', 'm3', false)`,
+      [address]
+    )
+
+    const unreadRes = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=true` })
+    expect(unreadRes.statusCode).toBe(200)
+    const unreadBody = unreadRes.json()
+    expect(unreadBody).toHaveLength(2)
+    expect(unreadBody.map((n: { id: number }) => n.id)).toEqual([22, 20])
+
+    const readRes = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&read=true` })
+    expect(readRes.statusCode).toBe(200)
+    const readBody = readRes.json()
+    expect(readBody).toHaveLength(1)
+    expect(readBody[0].id).toBe(21)
+
+    const invalidRes = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=maybe` })
+    expect(invalidRes.statusCode).toBe(400)
+  })
+
   it('PATCH /api/notifications/:id/read marks that row read and 404s for a missing id', async () => {
     const [row] = await query<{ id: number }>(
       `INSERT INTO notifications (address, type, title, message) VALUES ($1, 'info', 't', 'm') RETURNING id`,
