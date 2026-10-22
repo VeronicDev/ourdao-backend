@@ -158,6 +158,22 @@ export function memberSummaryCacheKey(address: string): string {
 
 /** Test-only: drop the shared client so a fresh REDIS_URL/mock takes effect
  *  on the next call. Never used outside tests. */
+export async function closeRedis(): Promise<void> {
+  if (!client) return
+  try {
+    if (client.status === 'ready' || client.status === 'connecting' || client.status === 'connect') {
+      await client.quit()
+    } else {
+      client.disconnect()
+    }
+  } catch {
+    client.disconnect()
+  } finally {
+    client = null
+    loggedConnectionFailure = false
+  }
+}
+
 export function __resetCacheClientForTests(): void {
   if (client) {
     client.disconnect()

@@ -50,6 +50,13 @@ try {
   throw err
 }
 
+import { closeRedis } from '../src/cache/redis.js'
+import { afterAll } from 'vitest'
+
+afterAll(async () => {
+  await closeRedis()
+})
+
 // Best-effort cleanup when tests complete. This won't run if the process is
 // killed hard (SIGKILL), so a separate cleanup script (scripts/clean-test-schemas.ts)
 // handles orphaned schemas.
