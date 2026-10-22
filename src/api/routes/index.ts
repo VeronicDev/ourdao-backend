@@ -567,7 +567,7 @@ export async function registerRoutes(app: FastifyInstance, opts: { nonceStore: N
     return { timeline: await entityTimeline(TREASURY_TIMELINE_SYMBOLS, id) }
   })
 
-  // --- Notifications for an address (optional ?before=<id> cursor) ---
+  // --- Notifications for an address (optional ?before=<id> cursor, optional ?unread= or ?read= filter) ---
   app.get('/notifications', async (req, reply) => {
     setCachePolicy(reply, 'private')
     const q = req.query as Record<string, unknown>
@@ -579,8 +579,24 @@ export async function registerRoutes(app: FastifyInstance, opts: { nonceStore: N
     const before = cursor(q.before)
     if (invalidCursor(q.before)) return reply.code(400).send({ error: 'invalid before cursor' })
 
+    let unreadFilter: boolean | null = null
+    if (q.unread !== undefined) {
+      if (q.unread === 'true' || q.unread === true) unreadFilter = true
+      else if (q.unread === 'false' || q.unread === false) unreadFilter = false
+      else return reply.code(400).send({ error: 'invalid unread parameter' })
+    }
+    if (q.read !== undefined) {
+      if (q.read === 'true' || q.read === true) unreadFilter = false
+      else if (q.read === 'false' || q.read === false) unreadFilter = true
+      else return reply.code(400).send({ error: 'invalid read parameter' })
+    }
+
     const conditions = ['address = $1']
     const params: unknown[] = [q.address]
+    if (unreadFilter !== null) {
+      params.push(unreadFilter)
+      conditions.push(`read = $${params.length}`)
+    }
     if (before !== null) {
       params.push(before)
       conditions.push(`id < $${params.length}`)

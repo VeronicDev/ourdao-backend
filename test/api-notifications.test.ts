@@ -47,6 +47,33 @@ describe('API: notification mutations', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  it('GET /api/notifications filters by unread state', async () => {
+    await query(
+      `INSERT INTO notifications (address, type, title, message, read) VALUES
+       ($1, 'info', 't1', 'm1', false),
+       ($1, 'info', 't2', 'm2', true),
+       ($1, 'info', 't3', 'm3', false)`,
+      [address]
+    )
+
+    const resUnread = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=true` })
+    expect(resUnread.statusCode).toBe(200)
+    const unreadBody = resUnread.json()
+    expect(unreadBody).toHaveLength(2)
+    expect(unreadBody.every((n: { read: boolean }) => !n.read)).toBe(true)
+
+    const resRead = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=false` })
+    expect(resRead.statusCode).toBe(200)
+    const readBody = resRead.json()
+    expect(readBody).toHaveLength(1)
+    expect(readBody[0].read).toBe(true)
+  })
+
+  it('GET /api/notifications rejects invalid unread parameter', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=maybe` })
+    expect(res.statusCode).toBe(400)
+  })
+
   it('PATCH /api/notifications/:id/read marks that row read and 404s for a missing id', async () => {
     const [row] = await query<{ id: number }>(
       `INSERT INTO notifications (address, type, title, message) VALUES ($1, 'info', 't', 'm') RETURNING id`,
