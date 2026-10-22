@@ -29,22 +29,19 @@ describe('API: GET /api/members pagination', () => {
     // Fetch first page of 100
     const page1Res = await app.inject({ method: 'GET', url: '/api/members?limit=100' })
     expect(page1Res.statusCode).toBe(200)
-    const page1 = page1Res.json() as Array<{ address: string; joined_at: string }>
-    expect(page1).toHaveLength(100)
+    expect(page1Res.headers['x-total-count']).toBe('250')
+    const body1 = page1Res.json() as { members: Array<{ address: string; joined_at: string }>; nextCursor?: string }
+    expect(body1.members).toHaveLength(100)
+    expect(body1.nextCursor).toBeDefined()
 
-    // Most recent should be first
-    const lastItem1 = page1[page1.length - 1]
-    expect(lastItem1).toBeDefined()
-
-    const cursor = `${lastItem1!.joined_at},${lastItem1!.address}`
-    const page2Res = await app.inject({ method: 'GET', url: `/api/members?limit=100&before=${encodeURIComponent(cursor)}` })
+    const page2Res = await app.inject({ method: 'GET', url: `/api/members?limit=100&before=${encodeURIComponent(body1.nextCursor!)}` })
     expect(page2Res.statusCode).toBe(200)
-    const page2 = page2Res.json() as Array<{ address: string; joined_at: string }>
-    expect(page2.length).toBeGreaterThan(0)
+    const body2 = page2Res.json() as { members: Array<{ address: string; joined_at: string }>; nextCursor?: string }
+    expect(body2.members.length).toBeGreaterThan(0)
 
     // Ensure no overlap
-    const page1Addrs = new Set(page1.map((m) => m.address))
-    for (const m of page2) {
+    const page1Addrs = new Set(body1.members.map((m) => m.address))
+    for (const m of body2.members) {
       expect(page1Addrs.has(m.address)).toBe(false)
     }
   })
