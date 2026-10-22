@@ -4,7 +4,7 @@ import { isKnownSymbol, warnUnknownSymbol, type DecodedEvent } from '../stellar/
 import { STREAM_CHANNELS, type StreamChannel } from '../api/stream.js'
 import { getTracer } from '../telemetry.js'
 import type { NotificationType } from '../types.js'
-import { createHistoryCache } from '../api/history-cache.js'
+import { invalidateHistoryCache } from '../api/history-cache.js'
 
 async function incrementDailyLoanStats(
   client: PoolClient,
@@ -17,12 +17,7 @@ async function incrementDailyLoanStats(
     valueDefaulted?: string
   }
 ): Promise<void> {
-  const historyCache = createHistoryCache()
-  try {
-    await historyCache.invalidate()
-  } finally {
-    await historyCache.close()
-  }
+  await invalidateHistoryCache()
   await client.query(
     `INSERT INTO daily_loan_stats
        (day, loans_originated, principal_lent, principal_repaid, defaults_count, value_defaulted)
