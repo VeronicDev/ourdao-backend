@@ -47,6 +47,30 @@ describe('API: notification mutations', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  it('GET /api/notifications supports filtering by unread parameter', async () => {
+    await query(
+      `INSERT INTO notifications (address, type, title, message, read) VALUES
+       ($1, 'info', 't1', 'm1', false),
+       ($1, 'info', 't2', 'm2', true),
+       ($1, 'info', 't3', 'm3', false)`,
+      [address]
+    )
+    const resUnread = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=true` })
+    const bodyUnread = resUnread.json()
+    expect(bodyUnread).toHaveLength(2)
+    expect(bodyUnread.every((n: { read: boolean }) => !n.read)).toBe(true)
+
+    const resRead = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=false` })
+    const bodyRead = resRead.json()
+    expect(bodyRead).toHaveLength(1)
+    expect(bodyRead[0].read).toBe(true)
+  })
+
+  it('GET /api/notifications rejects an invalid unread parameter', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/notifications?address=${address}&unread=maybe` })
+    expect(res.statusCode).toBe(400)
+  })
+
   it('PATCH /api/notifications/:id/read marks that row read and 404s for a missing id', async () => {
     const [row] = await query<{ id: number }>(
       `INSERT INTO notifications (address, type, title, message) VALUES ($1, 'info', 't', 'm') RETURNING id`,
