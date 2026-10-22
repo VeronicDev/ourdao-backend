@@ -35,33 +35,7 @@ import { replayFailedEvent } from '../../indexer/replay.js'
 import { createHistoryCache } from '../history-cache.js'
 
 
-// Issue #291: write one row to admin_audit_log for every authenticated admin
-// action. Called fire-and-forget — a logging failure must never block the
-// action itself; errors are logged via the request logger so they appear in
-// the operator's log stream with the same correlation id as the action.
-//
-// `ip` is the request IP (req.ip in Fastify, which respects TRUST_PROXY); it
-// is stored as-is — trust level depends on how the server is deployed.
-// `payload` is an action-specific object (event id, ledger, etc.) that gives
-// an auditor enough context to reconstruct what changed.
-async function writeAuditLog(
-  adminAddress: string,
-  action: AdminAuditAction | string,
-  ip: string | null,
-  payload: Record<string, unknown>,
-  log: { error(obj: unknown, msg: string): void }
-): Promise<void> {
-  try {
-    await query(
-      `INSERT INTO admin_audit_log (admin_address, action, ip_address, payload)
-       VALUES ($1, $2, $3, $4)`,
-      [adminAddress, action, ip ?? null, JSON.stringify(payload)]
-    )
-  } catch (err) {
-    // Never let a logging failure surface to the caller — log it and move on.
-    log.error({ err }, `[audit] failed to write audit log entry action=${action}`)
-  }
-}
+
 function parseLimit(v: unknown, def = 50, max = 200): number | null {
   if (v === undefined || v === null || v === '') return def
   const raw = String(v).trim()
@@ -278,7 +252,7 @@ async function fetchMemberSummary(address: string): Promise<MemberSummary | null
           END,
           'repaid_loans_count', COALESCE((SELECT repaid_loans_count::int FROM member_loans_agg), 0),
           'defaulted_loans_count', COALESCE((SELECT defaulted_loans_count::int FROM member_loans_agg), 0),
-          'defaulted_loans_value', COALESCE((SELECT defaulted_loans_value FROM member_loans_agg), 0)::text
+          'defaulted_loans_value', COALESCE((SELECT defaulted_loans_value::int FROM member_loans_agg), 0)::text
         )
       ) as summary
     FROM m
@@ -296,6 +270,24 @@ async function fetchMemberSummary(address: string): Promise<MemberSummary | null
 // is stored as-is — trust level depends on how the server is deployed.
 // `payload` is an action-specific object (event id, ledger, etc.) that gives
 // an auditor enough context to reconstruct what changed.
+async function writeAuditLog(
+  adminAddress: string,
+  action: AdminAuditAction | string,
+  ip: string | null,
+  payload: Record<string, unknown>,
+  log: { error(obj: unknown, msg: string): void }
+): Promise<void> {
+  try {
+    await query(
+      `INSERT INTO admin_audit_log (admin_address, action, ip_address, payload)
+       VALUES ($1, $2, $3, $4)`,
+      [adminAddress, action, ip ?? null, JSON.stringify(payload)]
+    )
+  } catch (err) {
+    // Never let a logging failure surface to the caller — log it and move on.
+    log.error({ err }, `[audit] failed to write audit log entry action=${action}`)
+  }
+}
 
 
 export async function registerRoutes(app: FastifyInstance, opts: { nonceStore: NonceStore }): Promise<void> {
@@ -373,6 +365,7 @@ export async function registerRoutes(app: FastifyInstance, opts: { nonceStore: N
     const lastMember = members[members.length - 1]
     if (lastMember && lastMember.joined_ledger !== null) {
       response.nextCursor = String(lastMember.joined_ledger)
+      reply.header('x-next-cursor', response.nextCursor)
     }
     return response
   })

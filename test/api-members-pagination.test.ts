@@ -15,7 +15,7 @@ describe('API: GET /api/members pagination', () => {
   })
   afterAll(closeDb)
 
-  it('paginates through member lists larger than limit using before cursor', async () => {
+  it('paginates through member lists larger than limit using before cursor and metadata/headers', async () => {
     const addrs = []
     for (let i = 0; i < 5; i++) {
       const kp = Keypair.random()
@@ -29,20 +29,22 @@ describe('API: GET /api/members pagination', () => {
 
     const res1 = await app.inject({ method: 'GET', url: '/api/members?limit=2' })
     expect(res1.statusCode).toBe(200)
-    const page1 = res1.json() as Array<{ address: string; joined_at: string }>
-    expect(page1).toHaveLength(2)
+    const body1 = res1.json() as { members: Array<{ address: string; joined_at: string }>; nextCursor?: string }
+    expect(body1.members).toHaveLength(2)
+    expect(body1.nextCursor).toBeDefined()
+    expect(res1.headers['x-next-cursor']).toBe(body1.nextCursor)
 
-    const last = page1[1]
+    const last = body1.members[1]
     expect(last).toBeDefined()
-    const cursorStr = `${last!.joined_at},${last!.address}`
+    const cursorVal = body1.nextCursor!
 
-    const res2 = await app.inject({ method: 'GET', url: `/api/members?limit=2&before=${encodeURIComponent(cursorStr)}` })
+    const res2 = await app.inject({ method: 'GET', url: `/api/members?limit=2&before=${encodeURIComponent(cursorVal)}` })
     expect(res2.statusCode).toBe(200)
-    const page2 = res2.json() as Array<{ address: string; joined_at: string }>
-    expect(page2.length).toBeGreaterThan(0)
+    const body2 = res2.json() as { members: Array<{ address: string; joined_at: string }>; nextCursor?: string }
+    expect(body2.members.length).toBeGreaterThan(0)
 
-    for (const m of page2) {
-      expect(page1.some((p) => p.address === m.address)).toBe(false)
+    for (const m of body2.members) {
+      expect(body1.members.some((p) => p.address === m.address)).toBe(false)
     }
   })
 
