@@ -29,6 +29,30 @@
     },
     "/api/members": {
       "get": {
+        "summary": "List members with cursor pagination",
+        "tags": [
+          "Members"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "Max rows to return (1-200, default 50)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Pagination cursor (member ID)."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Default Response"
