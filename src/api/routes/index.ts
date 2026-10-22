@@ -30,10 +30,9 @@ import { getConnectedStreamCount, getNotificationFailureCount, registerStreamEnd
 import { historicalOrLive, setCachePolicy } from '../cache-policy.js'
 import { ConcurrencyGate } from '../load-shedding.js'
 import { withLoanDerived } from '../loan-derived.js'
-import { getOrSetCache, membersListCacheKey, memberSummaryCacheKey } from '../../cache/redis.js'
+import { getOrSetCache, memberSummaryCacheKey } from '../../cache/redis.js'
 import { replayFailedEvent } from '../../indexer/replay.js'
 import { createHistoryCache } from '../history-cache.js'
-
 function parseLimit(v: unknown, def = 50, max = 200): number | null {
   if (v === undefined || v === null || v === '') return def
   const raw = String(v).trim()
@@ -250,7 +249,7 @@ async function fetchMemberSummary(address: string): Promise<MemberSummary | null
           END,
           'repaid_loans_count', COALESCE((SELECT repaid_loans_count::int FROM member_loans_agg), 0),
           'defaulted_loans_count', COALESCE((SELECT defaulted_loans_count::int FROM member_loans_agg), 0),
-          'defaulted_loans_value', COALESCE((SELECT defaulted_loans_value FROM member_loans_agg), 0)::text
+          'defaulted_loans_value', COALESCE((SELECT defaulted_loans_value::int FROM member_loans_agg), 0)::text
         )
       ) as summary
     FROM m
@@ -286,6 +285,7 @@ async function writeAuditLog(
     log.error({ err }, `[audit] failed to write audit log entry action=${action}`)
   }
 }
+
 
 export async function registerRoutes(app: FastifyInstance, opts: { nonceStore: NonceStore }): Promise<void> {
   const { nonceStore } = opts
