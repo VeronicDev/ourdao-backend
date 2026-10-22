@@ -34,6 +34,16 @@ import { getOrSetCache, membersListCacheKey, memberSummaryCacheKey } from '../..
 import { replayFailedEvent } from '../../indexer/replay.js'
 import { createHistoryCache } from '../history-cache.js'
 
+
+// Issue #291: write one row to admin_audit_log for every authenticated admin
+// action. Called fire-and-forget — a logging failure must never block the
+// action itself; errors are logged via the request logger so they appear in
+// the operator's log stream with the same correlation id as the action.
+//
+// `ip` is the request IP (req.ip in Fastify, which respects TRUST_PROXY); it
+// is stored as-is — trust level depends on how the server is deployed.
+// `payload` is an action-specific object (event id, ledger, etc.) that gives
+// an auditor enough context to reconstruct what changed.
 function parseLimit(v: unknown, def = 50, max = 200): number | null {
   if (v === undefined || v === null || v === '') return def
   const raw = String(v).trim()
