@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS members (
 -- non-exited rows, so `count(*) ... WHERE exited = false` is an index-only
 -- scan over the small live set rather than a seq scan of every member ever.
 CREATE INDEX IF NOT EXISTS members_active_idx ON members (address) WHERE exited = false;
+CREATE INDEX IF NOT EXISTS members_joined_at_address_idx ON members (joined_ledger DESC, address DESC);
 
 -- `votes_for`/`votes_against` hold stake-weighted voting power (see the
 -- Event catalog section of the README), which can exceed what INTEGER was
