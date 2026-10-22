@@ -53,4 +53,32 @@ describe('API: historical loan stats', () => {
       },
     ]))
   })
+
+  it('does not cache empty stats array for 1 hour on cold start and invalidates on cache/reindex', async () => {
+    // Cold start with no stats
+    const res1 = await app.inject({ method: 'GET', url: '/api/stats/history' })
+    expect(res1.statusCode).toBe(200)
+    expect(res1.json().data).toEqual([])
+
+    // Now insert stats (simulating loan origination / reindex)
+    await query(
+      `INSERT INTO daily_loan_stats
+         (day, loans_originated, principal_lent, principal_repaid, defaults_count, value_defaulted)
+       VALUES
+         ('2026-02-01', 1, 1000, 0, 0, 0)`
+    )
+
+    // Invalidate history cache as handlers/reindex do
+    const { createHistoryCache } = await import('../src/api/history-cache.js')
+    const hc = createHistoryCache()
+    await hc.invalidate()
+    await hc.close()
+
+    // Subsequent call should immediately reflect the new stats without waiting for 1 hour
+    const res2 = await app.inject({ method: 'GET', url: '/api/stats/history' })
+    expect(res2.statusCode).toBe(200)
+    expect(res2.json().data).toHaveLength(1)
+    expect(res2.json().data[0].date).toBe('2026-02-01')
+    expect(res2.json().data[0].principalLent).toBe('1000')
+  })
 })
